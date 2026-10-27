@@ -11,7 +11,7 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <meta name="apple-mobile-web-app-title" content="חלה">
-<title>מחשבון בצק לחלה · Challah Dough Calculator</title>
+<title>חלה · Challah</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
@@ -124,6 +124,10 @@ ol.steps b{font-weight:700;}
     <div class="seg" id="veganSeg"></div>
   </div>
   <div class="seg-row">
+    <span class="seg-lbl" id="fatLbl"></span>
+    <div class="seg" id="fatSeg"></div>
+  </div>
+  <div class="seg-row">
     <span class="seg-lbl" id="flourSegLbl"></span>
     <div class="seg" id="flourSeg"></div>
   </div>
@@ -172,6 +176,7 @@ ol.steps b{font-weight:700;}
 
   <div class="notes">
     <h3 id="notesHead"></h3>
+    <p id="noteFat"></p>
     <p id="noteWash"></p>
     <p id="noteFlour"></p>
   </div>
@@ -185,7 +190,7 @@ ol.steps b{font-weight:700;}
    flour's strength — 350 for the 14.4% mix, 360 for a single very strong
    flour, 330 for a 13.5% brioche flour, which absorbs less.          */
 var REST={oil:58,honey:40,sugar:48,yolks:36,salt:17,yeast:14};
-var OZ=28.3495, BASE_FLOUR=800;
+var OZ=28.3495, BASE_FLOUR=800, WASTE=1.03;   /* dough = pieces x 1.03 (3% loss) */
 
 function mkBase(flours,water){
   var b={}; for(var f in flours) b[f]=flours[f];
@@ -196,7 +201,7 @@ var FLOURS={
             he:"מניטובה + חלה", en:"Two flours"},
   strong:  {base:mkBase({flour:800},360), knead:-2,
             he:"מניטובה בלבד", en:"Strong only"},
-  brioche: {base:mkBase({flour:800},330), knead:0,
+  brioche: {base:mkBase({flour:800},344), knead:0,
             he:"בריוש 13.5%", en:"Brioche flour"},
   bread:   {base:mkBase({flour:800},330), knead:0,
             he:"קמח לחם", en:"Bread flour"}
@@ -211,26 +216,32 @@ var FLOURNAME={
   brioche:{he:"קמח בריוש (13.5%)",en:"Brioche flour (13.5%)"},
   bread:{he:"קמח לחם (סופר)",en:"Bread flour (supermarket)"}
 };
-var REST_HE=[{k:"water",n:"מים",u:'מ"ל'},{k:"oil",n:"שמן",u:"גר'"},{k:"honey",n:"דבש",u:"גר'"},
+var REST_HE=[{k:"water",n:"מים",u:'מ"ל'},{k:"oil",n:"שמן",u:"גר'"},{k:"butter",n:"חמאה (לא מלוחה)",u:"גר'"},{k:"honey",n:"דבש",u:"גר'"},
  {k:"sugar",n:"סוכר",u:"גר'"},{k:"yolks",n:"חלמונים",u:"גר'"},{k:"salt",n:"מלח",u:"גר'"},
  {k:"yeast",n:"שמרים יבשים",u:"גר'"}];
-var REST_EN=[{k:"water",n:"Water",cup:236.6,mode:"cup"},{k:"oil",n:"Neutral oil",cup:218,mode:"spoon"},
+var REST_EN=[{k:"water",n:"Water",cup:236.6,mode:"cup"},{k:"oil",n:"Neutral oil",cup:218,mode:"spoon"},{k:"butter",n:"Unsalted butter",cup:227,mode:"butter"},
  {k:"honey",n:"Honey",cup:340,mode:"spoon"},{k:"sugar",n:"Granulated sugar",cup:200,mode:"cup"},
  {k:"yolks",n:"Egg yolks",mode:"yolk"},{k:"salt",n:"Fine sea salt",cup:288,mode:"spoon"},
  {k:"yeast",n:"Instant yeast",cup:149,mode:"yeast"}];
 
-var lang="he", flour="mix", vegan=false, unitW=600, focusedId=null, shape="loaf", strands=4;
+var lang="he", flour="mix", vegan=false, dairy=false, unitW=600, focusedId=null, shape="loaf", strands=4;
 try{ var st=localStorage.getItem("challah_lang"); if(st==="en"||st==="he") lang=st;
      vegan=localStorage.getItem("challah_vegan")==="1";
+     dairy=!vegan && localStorage.getItem("challah_dairy")==="1";
      var sf=localStorage.getItem("challah_flour"); if(FLOURS[sf]) flour=sf; }catch(e){}
-var scale=1800/TOT();   /* default: 3 loaves x 600 g */
+var scale=1800*WASTE/TOT();   /* default: 3 loaves x 600 g */
 
 function isEn(){ return lang==="en"; }
 /* Vegan: no yolks; extra oil = 80% of the yolk weight */
+/* Dairy: butter replaces the oil at 1.2x (butter is ~82% fat), and the ~16% water
+   it brings is taken out of the water. */
 function BASE(){
-  var b=(flour==="bread")?(isEn()?BREAD_EN:BREAD_HE):FLOURS[flour].base; if(!vegan) return b;
+  var b=(flour==="bread")?(isEn()?BREAD_EN:BREAD_HE):FLOURS[flour].base;
+  if(!vegan && !dairy) return b;
   var c={}; for(var k in b) c[k]=b[k];
-  c.oil=b.oil+0.8*b.yolks; c.yolks=0; return c;
+  if(vegan){ c.oil=b.oil+0.8*b.yolks; c.yolks=0; }
+  else { c.butter=b.oil*1.2; c.oil=0; c.water=b.water-0.16*c.butter; }
+  return c;
 }
 function TOT(){ var b=BASE(),t=0; for(var k in b) t+=b[k]; return t; }
 function washG(){ return Math.max(40,dough()*0.015); }   /* ~1.5% of dough weight */
@@ -258,15 +269,15 @@ function ROWS(){
   } else {
     rows.push({k:"flour",n:nm,u:"גר'",cup:120,mode:"cup"});
   }
-  return rows.concat(isEn()?REST_EN:REST_HE).filter(function(r){ return !(vegan && r.k==="yolks"); });
+  return rows.concat(isEn()?REST_EN:REST_HE).filter(function(r){ return !(vegan && r.k==="yolks") && !(dairy && r.k==="oil") && !(!dairy && r.k==="butter"); });
 }
 function dough(){ return TOT()*scale; }
 function flourG(){ return BASE_FLOUR*scale; }
 function hydration(){ return BASE().water/BASE_FLOUR*100; }
 function amt(key){ return BASE()[key]*scale; }
 function unitG(){ return isEn()? (unitW||21.25)*OZ : (unitW||600); }
-function loaves(){ return Math.max(1,Math.round(dough()/unitG())); }
-function actualG(){ return dough()/loaves(); }
+function loaves(){ return Math.max(1,Math.round(dough()/(unitG()*WASTE))); }
+function actualG(){ return dough()/(loaves()*WASTE); }   /* weight of each piece */
 
 /* ---------- number display ---------- */
 function fmtG(n){ if(!isFinite(n))return"0"; var r=n<25?Math.round(n*2)/2:Math.round(n); return String(r); }
@@ -292,6 +303,7 @@ function volText(r,grams){
   }
   if(r.mode==="yolk") return (Math.round(grams/18*10)/10)+" large yolks";
   var cups=grams/r.cup, tbsp=cups*16, tsp=cups*48;
+  if(r.mode==="butter") return frac(tbsp)+" Tbsp  ·  "+(Math.round(grams/113.4*10)/10)+" sticks";
   if(r.mode==="yeast") return frac(tsp)+" tsp  ·  "+(Math.round(grams/7*10)/10)+" packets";
   if(r.k==="water") return frac(cups)+(cups<1.25?" cup":" cups")+"  ·  "+hyd+"% hydration";
   if(r.mode==="spoon"||cups<0.25) return tbsp>=1?frac(tbsp)+" Tbsp":frac(tsp)+" tsp";
@@ -305,10 +317,20 @@ var shapeSeg=document.getElementById("shapeSeg"), langSeg=document.getElementByI
   var b=document.createElement("button"); b.className="chip"; b.setAttribute("data-v",v);
   b.onclick=function(){
     if(vegan===v) return;
-    var keep=dough(); vegan=v; scale=keep/TOT();
-    try{ localStorage.setItem("challah_vegan",v?"1":"0"); }catch(e){}
+    var keep=dough(); vegan=v; if(v) dairy=false; scale=keep/TOT();
+    try{ localStorage.setItem("challah_vegan",v?"1":"0"); localStorage.setItem("challah_dairy",dairy?"1":"0"); }catch(e){}
     focusedId=null; buildRows(); render(); };
   veganSeg.appendChild(b); });
+
+var fatSeg=document.getElementById("fatSeg");
+[false,true].forEach(function(v){
+  var b=document.createElement("button"); b.className="chip"; b.setAttribute("data-v",v);
+  b.onclick=function(){
+    if(dairy===v) return;
+    var keep=dough(); dairy=v; if(v) vegan=false; scale=keep/TOT();
+    try{ localStorage.setItem("challah_dairy",v?"1":"0"); localStorage.setItem("challah_vegan",vegan?"1":"0"); }catch(e){}
+    focusedId=null; buildRows(); render(); };
+  fatSeg.appendChild(b); });
 
 ["mix","strong","brioche","bread"].forEach(function(v){
   var b=document.createElement("button"); b.className="chip"; b.setAttribute("data-v",v);
@@ -323,7 +345,7 @@ var shapeSeg=document.getElementById("shapeSeg"), langSeg=document.getElementByI
 ["loaf","rolls"].forEach(function(v){
   var b=document.createElement("button"); b.className="chip"; b.setAttribute("data-v",v);
   b.onclick=function(){ if(shape!==v){ shape=v; unitW = isEn()?(v==="rolls"?4.75:21.25):(v==="rolls"?135:600);
-      scale = (v==="rolls"?15:3)*unitG()/TOT(); }
+      scale = (v==="rolls"?15:3)*unitG()*WASTE/TOT(); }
     focusedId=null; render(); };
   shapeSeg.appendChild(b); });
 Array.prototype.forEach.call(langSeg.children,function(b){
@@ -355,9 +377,9 @@ function set(id,val){ var el=document.getElementById(id); if(focusedId!==id) el.
 
 bind("doughInput",function(t){ var v=num(t); if(v>0)
   scale=(isEn()? (v<15?v*16:v)*OZ : (v<50?v*1000:v))/TOT(); });
-bind("countInput",function(t){ var c=parseInt(t,10); if(c>0) scale=c*unitG()/TOT(); });
-bind("countTop",function(t){ var c=parseInt(t,10); if(c>0) scale=c*unitG()/TOT(); });
-bind("unitTop",function(t){ var w=num(t); if(w>0){ var c=loaves(); unitW=w; scale=c*unitG()/TOT(); } });
+bind("countInput",function(t){ var c=parseInt(t,10); if(c>0) scale=c*unitG()*WASTE/TOT(); });
+bind("countTop",function(t){ var c=parseInt(t,10); if(c>0) scale=c*unitG()*WASTE/TOT(); });
+bind("unitTop",function(t){ var w=num(t); if(w>0){ var c=loaves(); unitW=w; scale=c*unitG()*WASTE/TOT(); } });
 
 /* ---------- text ---------- */
 function steps(){
@@ -373,8 +395,9 @@ function steps(){
     var bake = rolls ? 'Bake <b>15–17 minutes at 375°F</b>'
       : 'Bake <b>'+(actualG()>450?"32–36":(actualG()>300?"24–26":"20"))+' minutes at 375°F</b>';
     var s=[
-      'In the mixer bowl, add in this order: <b>'+WU(amt("water"))+' ice-cold water</b>, <b>'+WU(amt("honey"))+' honey</b>, <b>'+WU(amt("oil"))+' oil</b>'+(vegan?'':', <b>'+WU(amt("yolks"))+' egg yolks</b>')+' and <b>'+WU(amt("salt"))+' salt</b>. Layer the '+flourTxt+' on top, then <b>'+WU(amt("sugar"))+' sugar</b> and <b>'+WU(amt("yeast"))+' instant yeast</b> over the flour. Start kneading.',
-      'Once a dough forms, knead on high speed for <b>8 minutes</b>, then knead <b>3 more minutes by hand</b>. The dough should come out at about <b>75°F (24°C)</b>.'+(big?' With this much dough, knead in two batches unless your mixer is 6 qt or larger.':''),
+      'In the mixer bowl, add in this order: <b>'+WU(amt("water"))+' ice-cold water</b>, <b>'+WU(amt("honey"))+' honey</b>, '+(dairy?'':'<b>'+WU(amt("oil"))+' oil</b>'+(vegan?'':', '))+(vegan?'':'<b>'+WU(amt("yolks"))+' egg yolks</b>')+' and <b>'+WU(amt("salt"))+' salt</b>. Layer the '+flourTxt+' on top, then <b>'+WU(amt("sugar"))+' sugar</b> and <b>'+WU(amt("yeast"))+' instant yeast</b> over the flour. Start kneading.',
+      (dairy ? 'Once a dough forms, knead on high speed for about <b>3 minutes</b>, until it clears the sides of the bowl. Add <b>'+WU(amt("butter"))+' unsalted butter</b>, soft but not melted, a few small pieces at a time, and keep kneading until each addition is absorbed — <b>8 minutes</b> on high in all — then knead <b>3 more minutes by hand</b>. The dough should come out at about <b>75°F (24°C)</b>.'
+             : 'Once a dough forms, knead on high speed for <b>8 minutes</b>, then knead <b>3 more minutes by hand</b>. The dough should come out at about <b>75°F (24°C)</b>.')+(big?' With this much dough, knead in two batches unless your mixer is 6 qt or larger.':''),
       'Round the dough, cover, and let it rise 1 to 1½ hours, until doubled.',
       rolls ? 'Divide into <b>'+loaves()+' pieces of '+WU(actualG())+'</b> each, round them, and rest covered for <b>30 minutes</b>.'
             : 'Divide into <b>'+(loaves()*strands)+' balls of '+strandW+' oz</b> — '+loaves()+' loaves × '+strands+' strands — round them, and rest covered for <b>30 minutes</b>.',
@@ -390,8 +413,9 @@ function steps(){
   var bakeH = rolls ? 'אופים <b>15–17 דק\' ב־190°</b> חום עליון־תחתון'
     : 'אופים <b>'+(actualG()>450?"32–36":(actualG()>300?"24–26":"20"))+' דק\' ב־190°</b> חום עליון־תחתון';
   var h=[
-    'שמים בקערה לפי הסדר: <b>'+fmtG(amt("water"))+' מ"ל מי קרח</b>, <b>'+WU(amt("honey"))+' דבש</b>, <b>'+WU(amt("oil"))+' שמן</b>'+(vegan?'':', <b>'+WU(amt("yolks"))+' חלמונים</b>')+' ו<b>'+WU(amt("salt"))+' מלח</b>. מעליהם '+flourTxt+', ומעל הקמח <b>'+WU(amt("sugar"))+' סוכר</b> ו<b>'+WU(amt("yeast"))+' שמרים</b>. מתחילים ללוש.',
-    'לאחר שנוצר בצק לשים במהירות גבוהה <b>8 דק\'</b>, ואז לשים עוד <b>3 דק\' ידנית</b>. הבצק צריך להיות בטמפרטורה של כ־<b>24 מעלות צלזיוס</b>.'+(big?' בכמות הזו כדאי ללוש בשתי מנות אם המלוש קטן מ־6 ליטר.':''),
+    'שמים בקערה לפי הסדר: <b>'+fmtG(amt("water"))+' מ"ל מי קרח</b>, <b>'+WU(amt("honey"))+' דבש</b>, '+(dairy?'':'<b>'+WU(amt("oil"))+' שמן</b>'+(vegan?'':', '))+(vegan?'':'<b>'+WU(amt("yolks"))+' חלמונים</b>')+' ו<b>'+WU(amt("salt"))+' מלח</b>. מעליהם '+flourTxt+', ומעל הקמח <b>'+WU(amt("sugar"))+' סוכר</b> ו<b>'+WU(amt("yeast"))+' שמרים</b>. מתחילים ללוש.',
+    (dairy ? 'לאחר שנוצר בצק לשים במהירות גבוהה כ־<b>3 דק\'</b>, עד שהבצק מתנקה מדפנות הקערה. מוסיפים <b>'+WU(amt("butter"))+' חמאה</b> רכה אך לא מומסת, בחתיכות קטנות, כמה בכל פעם, וממשיכים ללוש עד שהיא נבלעת — בסך הכול <b>8 דק\'</b> במהירות גבוהה — ואז לשים עוד <b>3 דק\' ידנית</b>. הבצק צריך להיות בטמפרטורה של כ־<b>24 מעלות צלזיוס</b>.'
+           : 'לאחר שנוצר בצק לשים במהירות גבוהה <b>8 דק\'</b>, ואז לשים עוד <b>3 דק\' ידנית</b>. הבצק צריך להיות בטמפרטורה של כ־<b>24 מעלות צלזיוס</b>.')+(big?' בכמות הזו כדאי ללוש בשתי מנות אם המלוש קטן מ־6 ליטר.':''),
     'מכדררים, מכסים ומתפיחים שעה עד שעה וחצי, עד הכפלת נפח.',
     rolls ? 'מחלקים ל־<b>'+loaves()+' לחמניות של '+WU(actualG())+'</b>, מכדררים ומניחים מכוסה <b>חצי שעה</b>.'
           : 'מחלקים ל־<b>'+(loaves()*strands)+' כדורים של '+strandW+' גר\'</b> — '+loaves()+' חלות × '+strands+' צמות — מכדררים ומניחים מכוסה <b>חצי שעה</b>.',
@@ -404,21 +428,21 @@ function steps(){
 }
 
 var T={
- he:{title:"בצק לחלה",
+ he:{title:"חלה",
    sub:"שנו כל מספר — קמח, מים, כמות הבצק, מספר החלות או משקל החלה — וכל השאר יתעדכן לפי אותן פרופורציות.",
-   type:"סוג",regular:"רגילה",vegan:"טבעונית",flour:"קמח",shape:"אופים",braid:"קליעה",loaf:"חלה",rolls:"לחמניות",strand:" צמות",
+   type:"סוג",regular:"רגילה",vegan:"טבעונית",fat:"שומן",pareve:"פרווה (שמן)",dairy:"חלבית (חמאה)",flour:"קמח",shape:"אופים",braid:"קליעה",loaf:"חלה",rolls:"לחמניות",strand:" צמות",
    doughUnit:"גר'",doughLbl:"משקל הבצק — אפשר להזין כל כמות",flourLbl:"סה״כ קמח",
    ing:"מצרכים",hint:"לחצו על מספר כדי לשנות אותו",method:"הכנה",notes:"הערות",
    countLabel:function(u){return "מספר "+u;},unitLabel:function(u1){return "משקל "+u1;},
-   foot:'הביצה להברשה והשומשום אינם נכללים במשקל הבצק. חלמון בודד ≈ 18 גר\'.<br>שמירה במסך הבית: פתחו בספארי ← שיתוף ← הוספה למסך הבית.'},
- en:{title:"Challah Dough",
+   foot:'הביצה להברשה והשומשום אינם נכללים במשקל הבצק. חלמון בודד ≈ 18 גר\'.<br>משקל הבצק כולל פחת של 3% מעל משקל החלות/הלחמניות הרצוי.<br>שמירה במסך הבית: פתחו בספארי ← שיתוף ← הוספה למסך הבית.'},
+ en:{title:"Challah",
    sub:"Enter any one number — flour, water, dough weight, how many loaves, or the weight of each — and the rest rescales to match. Volume measures are approximate; weigh if you can.",
-   type:"Type",regular:"Regular",vegan:"Vegan",flour:"Flour",shape:"Shape",braid:"Braid",loaf:"Braided loaf",rolls:"Rolls",strand:"-strand",
+   type:"Type",regular:"Regular",vegan:"Vegan",fat:"Fat",pareve:"Pareve (oil)",dairy:"Dairy (butter)",flour:"Flour",shape:"Shape",braid:"Braid",loaf:"Braided loaf",rolls:"Rolls",strand:"-strand",
    doughUnit:"oz",doughLbl:"Total dough — ",flourLbl:"Total flour",
    ing:"Ingredients",hint:"tap any number to change it",method:"Method",notes:"Notes",
    countLabel:function(u){return u.charAt(0).toUpperCase()+u.slice(1);},
    unitLabel:function(u1){return "Weight per "+u1;},
-   foot:'Egg wash and sesame seeds are not counted in the dough weight. One large yolk ≈ 0.65 oz.<br>Salt is measured as fine sea or table salt — with Diamond Crystal kosher salt, double the spoon amount.<br>To keep this on your phone: open in Safari, tap Share, then Add to Home Screen.'}
+   foot:'Egg wash and sesame seeds are not counted in the dough weight. One large yolk ≈ 0.65 oz.<br>Total dough includes 3% extra for loss, above the weight of the loaves or rolls you want.<br>Salt is measured as fine sea or table salt — with Diamond Crystal kosher salt, double the spoon amount.<br>To keep this on your phone: open in Safari, tap Share, then Add to Home Screen.'}
 };
 
 function flourNote(){
@@ -436,6 +460,14 @@ function flourNote(){
     ? "<b>Flour:</b> brioche flour (13.5% protein) absorbs less, so water is cut to "+h+"% hydration. If the dough feels dry after 3–4 minutes of kneading, add water a tablespoon at a time; if a ball flattens instead of holding its shape, there is too much."
     : "<b>קמח:</b> קמח בריוש (13.5% חלבון) סופג פחות, ולכן המים מופחתים להידרציה של "+h+"%. אם הבצק נראה יבש אחרי 3–4 דקות לישה, מוסיפים מים בכף כל פעם; אם כדור משתטח ולא מחזיק צורה, יש יותר מדי מים.";
 }
+function fatNote(){
+  if(!dairy) return "";
+  var b=amt("butter"), wl=0.16*b, oilEq=BASE().butter/1.2*scale;
+  if(isEn()) return "<b>Butter:</b> "+WU(b)+" of unsalted butter replaces "+WU(oilEq)+" of oil (butter is about 82% fat and 16% water, so it is used at 1.2× the oil), and the water is reduced by "+
+    WU(wl)+" to make up for it. Butter goes in after the gluten has started to develop, not at the start. The crumb is richer and softer, the crust browns faster, so check the loaves 3–4 minutes early, and the bread stales a little sooner. This is a dairy challah. For a pareve one, use a pareve margarine in the same amount as the butter.";
+  return "<b>חמאה:</b> "+WU(b)+" חמאה לא מלוחה מחליפים "+WU(oilEq)+" שמן (חמאה היא כ־82% שומן ו־16% מים, ולכן משתמשים ב־1.2 מכמות השמן), והמים מופחתים ב־"+
+    (WU(wl))+" כדי לפצות. החמאה נכנסת אחרי שהגלוטן התחיל להתפתח ולא בהתחלה. הפרוסה עשירה ורכה יותר, הקרום מתכהה מהר יותר ולכן כדאי לבדוק את החלות 3–4 דקות מוקדם, והלחם מתייבש מעט מהר יותר. החלה חלבית. לגרסה פרווה אפשר להשתמש במרגרינה פרווה באותה כמות כמו החמאה.";
+}
 function notes(){
   var oilSub=WU(0.8*yolkG());                 /* 80% of the yolk weight, as oil */
   var oilTotal=WU(FLOURS[flour].base.oil*scale+0.8*yolkG());
@@ -444,7 +476,7 @@ function notes(){
   if(isEn()){
     return ["<b>No yolks?</b> Pick Vegan above, or leave them out and add 80% of their weight in oil instead — "+oilSub+
       " more oil, for "+oilTotal+" total. The crumb comes out a little lighter in color and slightly softer.",
-      "<b>Non-dairy, non-egg wash:</b> brush with a mix of <b>30% malt syrup, 60% water, 10% salt</b> by weight. For this batch that is about "+
+      "<b>Egg-free wash:</b> brush with a mix of <b>30% malt syrup, 60% water, 10% salt</b> by weight. For this batch that is about "+
       fmtOz(wh)+" oz malt syrup, "+fmtOz(ww)+" oz water and "+fmtOz(ws)+
       " oz salt. Warm it slightly so the syrup dissolves, brush right before baking, and expect a glossy, deeper-brown crust.",
       flourNote()];
@@ -476,6 +508,10 @@ function render(){
   document.getElementById("shapeLbl").textContent=t.shape;
   document.getElementById("flourSegLbl").textContent=t.flour;
   document.getElementById("veganLbl").textContent=t.type;
+  document.getElementById("fatLbl").textContent=t.fat;
+  Array.prototype.forEach.call(fatSeg.children,function(b){
+    var v=b.getAttribute("data-v")==="true";
+    b.textContent=v?t.dairy:t.pareve; b.setAttribute("data-on",v===dairy?"1":"0"); });
   Array.prototype.forEach.call(veganSeg.children,function(b){
     var v=b.getAttribute("data-v")==="true";
     b.textContent=v?t.vegan:t.regular; b.setAttribute("data-on",v===vegan?"1":"0"); });
@@ -528,6 +564,8 @@ function render(){
   document.getElementById("noteWash").innerHTML=nt[1];
   document.getElementById("noteWash").style.display=vegan?"none":"";
   document.getElementById("noteFlour").innerHTML=nt[2];
+  document.getElementById("noteFat").innerHTML=fatNote();
+  document.getElementById("noteFat").style.display=dairy?"":"none";
 }
 
 if(isEn()) unitW=21.25;
